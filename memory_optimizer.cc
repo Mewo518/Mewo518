@@ -11,7 +11,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-ÉÏÊöÎªĞí¿ÉÖ¤ 
+ä¸Šè¿°ä¸ºè®¸å¯è¯ 
 ==============================================================================*/
 
 #include "tensorflow/core/grappler/optimizers/memory_optimizer.h"
@@ -20,15 +20,15 @@ limitations under the License.
 #include <queue>
 #include <set>
 #include <unordered_map>
-#include <unordered_set>			//ÓÃÓÚunordered_set<string> 
+#include <unordered_set>			//ç”¨äºunordered_set<string> 
 #include <vector>
-/*ProtobufÊÇÓÃÓÚĞòÁĞ»¯½á¹¹»¯Êı¾İµÄĞ­Òé£¬ËüµÄÊı¾İ¸ñÊ½¸ü¼Ó½ô´Õ¡¢¿ìËÙ¡¢Áé»î¡£
-.pb.hÊÇProtocol Buffers£¨Protobuf£©µÄC++ÓïÑÔÉú³ÉµÄÔ´ÎÄ¼ş£¬
-ÓÃÓÚÊµÏÖÓë.protoÎÄ¼ş¶¨ÒåµÄÊı¾İ½á¹¹µÄĞòÁĞ»¯ºÍ·´ĞòÁĞ»¯
-Í¨¹ı¶¨Òå.protoÎÄ¼şÀ´ÃèÊöÊı¾İ½á¹¹£¬Ê¹ÓÃProtobuf¿ÉÒÔ·½±ãµØ½øĞĞÊı¾İĞòÁĞ»¯¡¢·´ĞòÁĞ»¯¡¢´«ÊäµÈ²Ù×÷¡£
-.pb.h¸ÃÎÄ¼ş°üº¬ÁËÓÉ.protoÎÄ¼ş×Ô¶¯Éú³ÉµÄC++´úÂë£¬¿ÉÒÔÖ±½ÓÔÚÓ¦ÓÃ³ÌĞòÖĞÊ¹ÓÃ¡£*/
+/*Protobufæ˜¯ç”¨äºåºåˆ—åŒ–ç»“æ„åŒ–æ•°æ®çš„åè®®ï¼Œå®ƒçš„æ•°æ®æ ¼å¼æ›´åŠ ç´§å‡‘ã€å¿«é€Ÿã€çµæ´»ã€‚
+.pb.hæ˜¯Protocol Buffersï¼ˆProtobufï¼‰çš„C++è¯­è¨€ç”Ÿæˆçš„æºæ–‡ä»¶ï¼Œ
+ç”¨äºå®ç°ä¸.protoæ–‡ä»¶å®šä¹‰çš„æ•°æ®ç»“æ„çš„åºåˆ—åŒ–å’Œååºåˆ—åŒ–
+é€šè¿‡å®šä¹‰.protoæ–‡ä»¶æ¥æè¿°æ•°æ®ç»“æ„ï¼Œä½¿ç”¨Protobufå¯ä»¥æ–¹ä¾¿åœ°è¿›è¡Œæ•°æ®åºåˆ—åŒ–ã€ååºåˆ—åŒ–ã€ä¼ è¾“ç­‰æ“ä½œã€‚
+.pb.hè¯¥æ–‡ä»¶åŒ…å«äº†ç”±.protoæ–‡ä»¶è‡ªåŠ¨ç”Ÿæˆçš„C++ä»£ç ï¼Œå¯ä»¥ç›´æ¥åœ¨åº”ç”¨ç¨‹åºä¸­ä½¿ç”¨ã€‚*/
 #include "tensorflow/core/framework/attr_value.pb.h"
-#include "tensorflow/core/framework/node_def.pb.h"	//NodeDefÀà 
+#include "tensorflow/core/framework/node_def.pb.h"	//NodeDefç±» 
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/tensor.pb.h"  // NOLINT
 #include "tensorflow/core/framework/tensor_shape.pb.h"
@@ -48,32 +48,32 @@ limitations under the License.
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/protobuf/rewriter_config.pb.h"
 #include "tensorflow/core/util/device_name_utils.h"
-//×Ü½áÉÏÊöÍ·ÎÄ¼ş£º .protoÎÄ¼ş¶¨ÒåÊı¾İÀàĞÍ£¬×Ô¶¯Éú³É.pb.h 
+//æ€»ç»“ä¸Šè¿°å¤´æ–‡ä»¶ï¼š .protoæ–‡ä»¶å®šä¹‰æ•°æ®ç±»å‹ï¼Œè‡ªåŠ¨ç”Ÿæˆ.pb.h 
 namespace tensorflow {
-	//namespaceÊÇÒ»¸öÓÃÓÚ¶¨ÒåÒ»×éÏà¹Øº¯Êı¡¢±äÁ¿»òÀàµÄÃüÃû¿Õ¼ä¡£
-	//Ê¹ÓÃnamespace¿ÉÒÔ±ÜÃâÃüÃû³åÍ»ºÍ´úÂë»ìÂÒ£¬Ê¹´úÂë¸üÒ×ÓÚÎ¬»¤ºÍ¹ÜÀí
-	//Ê¹ÓÃ·½·¨£ºtensorflow£º£º±äÁ¿»òÕß·½·¨ 
+	//namespaceæ˜¯ä¸€ä¸ªç”¨äºå®šä¹‰ä¸€ç»„ç›¸å…³å‡½æ•°ã€å˜é‡æˆ–ç±»çš„å‘½åç©ºé—´ã€‚
+	//ä½¿ç”¨namespaceå¯ä»¥é¿å…å‘½åå†²çªå’Œä»£ç æ··ä¹±ï¼Œä½¿ä»£ç æ›´æ˜“äºç»´æŠ¤å’Œç®¡ç†
+	//ä½¿ç”¨æ–¹æ³•ï¼štensorflowï¼šï¼šå˜é‡æˆ–è€…æ–¹æ³• 
 namespace grappler {
 
 namespace {
 
 // Prefix added to nodes which are recomputed.
-//ÖØĞÂ¼ÆËã½ÚµãµÄÇ°×º 
+//é‡æ–°è®¡ç®—èŠ‚ç‚¹çš„å‰ç¼€ 
 const char* kRecomputedNodePrefix = "Recomputed";
 const char* kRecomputeTriggerNodePrefix = "RecomputeTrigger";
 // Attribute which may be added to nodes to manually allow them to be
-//Ìí¼Óµ½½ÚµãµÄÊôĞÔ£¬ÒÔÊÖ¶¯ÔÊĞíËüÃÇ 
+//æ·»åŠ åˆ°èŠ‚ç‚¹çš„å±æ€§ï¼Œä»¥æ‰‹åŠ¨å…è®¸å®ƒä»¬ 
 // recomputed.
 const char* kRecomputeHint = "_recompute_hint";
 
 // Ops which we wouldn't mind recomputing to save memory.
 // TODO(allenl): Replace this list with a cost model.
-//todo Òª½øĞĞµÄ²Ù×÷£¬½«´ËÁĞ±íÌæ»»Îª³É±¾Ä£ĞÍ
+//todo è¦è¿›è¡Œçš„æ“ä½œï¼Œå°†æ­¤åˆ—è¡¨æ›¿æ¢ä¸ºæˆæœ¬æ¨¡å‹
 
-//unordered_set ÎŞĞò¼¯ºÏ£¬ÎŞĞòµ«±£Ö¤×Ö·û´®Î¨Ò» 	unordered_set<string>´æ´¢×Ö·û´®µÄ¼¯ºÏ 
-std::unordered_set<string> GetCheapToRecomputeOps() {        //GetCheapToRecomputeOpsº¯Êı 
-  std::unordered_set<string> cheap_ops = {"Add",			//cheap_ops ±äÁ¿ 
-//::×÷ÓÃÓò·Ö½âÔËËã·û£¬using namespace Ãû×Ö£¬ÓÃÓÚÊÍ·Å ÃüÃû¿Õ¼äÖĞµÄ±äÁ¿Ãû 
+//unordered_set æ— åºé›†åˆï¼Œæ— åºä½†ä¿è¯å­—ç¬¦ä¸²å”¯ä¸€ 	unordered_set<string>å­˜å‚¨å­—ç¬¦ä¸²çš„é›†åˆ 
+std::unordered_set<string> GetCheapToRecomputeOps() {        //GetCheapToRecomputeOpså‡½æ•° 
+  std::unordered_set<string> cheap_ops = {"Add",			//cheap_ops å˜é‡ 
+//::ä½œç”¨åŸŸåˆ†è§£è¿ç®—ç¬¦ï¼Œusing namespace åå­—ï¼Œç”¨äºé‡Šæ”¾ å‘½åç©ºé—´ä¸­çš„å˜é‡å 
                                           "AddN",
                                           "BiasAdd",
                                           "Cast",
@@ -100,23 +100,23 @@ std::unordered_set<string> GetCheapToRecomputeOps() {        //GetCheapToRecompu
   return cheap_ops;
 }
  
-// Find recomputable ops which feed into target nodes.feed into target nodes.·´À¡µ½Ä¿±ê½Úµã 
-//²éÕÒºòÑ¡ÖØ¼ÆËã½Úµã
+// Find recomputable ops which feed into target nodes.feed into target nodes.åé¦ˆåˆ°ç›®æ ‡èŠ‚ç‚¹ 
+//æ­¤å‡½æ•°æŸ¥æ‰¾å€™é€‰é‡è®¡ç®—èŠ‚ç‚¹ï¼Œè¿”å›candidate_recompute_nodes
 std::unordered_set<const NodeDef*> FindCandidateRecomputeNodes(
     const NodeMap& node_map, const GraphDef* graph,
     const std::function<bool(const NodeDef&)>& is_candidate,
     const std::function<bool(const NodeDef&)>& is_target)
-{//ÉÏÃæËÄ¸öÊÇº¯ÊıµÄÊäÈë²ÎÊı NodeMap&ÀàËÆÓÚint* 
+{//ä¸Šé¢å››ä¸ªæ˜¯å‡½æ•°çš„è¾“å…¥å‚æ•° NodeMap&ç±»ä¼¼äºint*  åŠ constæ˜¯å› ä¸ºä¿è¯æ•°æ®ä¸å˜æ€§æé«˜å®‰å…¨æ€§ï¼Œå¦‚ä½¿ä»£ç ä¸­çš„ NodeDefé‡Œé¢éƒ½æ˜¯ä¸€äº›å¸¸é‡1ï¼Œ2ï¼Œ3ï¼Œä¸ºäº†è®©å…¶ä¸å˜ï¼Œä¸è¢«å…¶ä»–å˜é‡ç»™æ”¹äº†
   std::unordered_set<const NodeDef*> candidate_recompute_nodes;
-  for (const auto& node : graph->node()) {
-    if (!is_candidate(node)) {
+  for (const auto& node : graph->node()) {	//èŠ‚ç‚¹æ˜¯ä¼ å…¥å›¾ä¸­çš„èŠ‚ç‚¹
+    if (!is_candidate(node)) {	//is_candidateæ˜¯ä¼ å…¥çš„å‡½æ•°ï¼Œå¯¹å€™é€‰çš„èŠ‚ç‚¹ä¸€å¾‹ä¸çœ‹ å°±ç»§ç»­for
       continue;
     }
-    bool has_target_output = false;
+    bool has_target_output = false;//node_mapæ˜¯ä¼ å…¥çš„å›¾ï¼Œåˆ°åº•ä¼ å…¥ä»€ä¹ˆä¸æ¸…æ¥š
     for (const NodeDef* output : node_map.GetOutputs(node.name())) {
-      // It only makes sense to recompute this if it feeds into a target
+      // It only makes sense to recompute this if it feeds into a target	 åªæœ‰åœ¨å®ƒä¸ºæŸä¸ªç›®æ ‡èŠ‚ç‚¹æä¾›è¾“å…¥çš„æƒ…å†µä¸‹ï¼Œæ‰éœ€è¦é‡æ–°è®¡ç®—
       // node. We expand this to dependencies in GetOpGroupsToRecompute.
-      if (is_target(*output)) {
+      if (is_target(*output)) {	//is_targetæ˜¯ä¼ å…¥çš„å‡½æ•°ï¼Œè¾“å‡ºoutputæ˜¯ç›®æ ‡èŠ‚ç‚¹å°±has_target_outputæ”¹ä¸ºtrueç»§ç»­for
         has_target_output = true;
         break;
       }
@@ -125,8 +125,8 @@ std::unordered_set<const NodeDef*> FindCandidateRecomputeNodes(
       continue;
     }
     bool has_target_input = false;
-    for (const string& input_name : node.input()) {
-      // Don't recompute nodes which depend on target nodes.
+    for (const string& input_name : node.input()) {//nodeä¸ºæ­£åœ¨éå†å›¾çš„èŠ‚ç‚¹
+      // Don't recompute nodes which depend on target nodes.ä¸è¦é‡è®¡ç®—ä¾é ç›®æ ‡èŠ‚ç‚¹çš„èŠ‚ç‚¹
       const NodeDef* input_node = node_map.GetNode(input_name);
       if (is_target(*input_node)) {
         has_target_input = true;
@@ -136,7 +136,7 @@ std::unordered_set<const NodeDef*> FindCandidateRecomputeNodes(
     if (has_target_input) {
       continue;
     }
-    candidate_recompute_nodes.insert(&node);
+    candidate_recompute_nodes.insert(&node);	//ç¬¦åˆä¸¤ä¸ªè¦æ±‚å°±åŠ å…¥
   }
   return candidate_recompute_nodes;
 }
