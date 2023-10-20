@@ -144,24 +144,25 @@ std::unordered_set<const NodeDef*> FindCandidateRecomputeNodes(
 void connected_subgraph(const NodeMap& node_map, bool collect_inputs,
                         bool collect_outputs,
                         const std::function<bool(const NodeDef&)>& is_candidate,
-                        std::unordered_set<const NodeDef*>* expanded_nodes) {
-  std::queue<const NodeDef*> to_visit;
+                        std::unordered_set<const NodeDef*>* expanded_nodes) 
+{	//	五个输入参数
+  std::queue<const NodeDef*> to_visit;		//queue是队列，具有先进先出的特点
   for (const NodeDef* starting_node : *expanded_nodes) {
     to_visit.push(starting_node);
-  }
+  }	//expanded_nodes赋给to_visit,expanded_nodes清空
   expanded_nodes->clear();
-  while (!to_visit.empty()) {
+  while (!to_visit.empty()) {	//只要她非空
     const NodeDef* current_node = to_visit.front();
-    to_visit.pop();
-    if (!expanded_nodes->insert(current_node).second) {
+    to_visit.pop();	//pop取出操作
+    if (!expanded_nodes->insert(current_node).second) {		//.second是获取这个insert方法返回结果的布尔值，用于判断
       // We already visited this node
       continue;
     }
     if (collect_inputs) {
-      // Add inputs and outputs to this subgraph if they are candidates
+      // Add inputs and outputs to this subgraph if they are candidates	如果输入是候选者，则将它们添加到此子图中
       for (const string& input_name_raw : current_node->input()) {
         const NodeDef* input_node = node_map.GetNode(input_name_raw);
-        if (expanded_nodes->count(input_node) == 0 &&
+        if (expanded_nodes->count(input_node) == 0 &&	//expanded_nodes->count(input_node) == 0 不太懂
             is_candidate(*input_node)) {
           to_visit.push(input_node);
         }
@@ -170,35 +171,35 @@ void connected_subgraph(const NodeMap& node_map, bool collect_inputs,
     if (collect_outputs) {
       for (const NodeDef* output : node_map.GetOutputs(current_node->name())) {
         if (expanded_nodes->count(output) == 0 && is_candidate(*output)) {
-          to_visit.push(output);
+          to_visit.push(output);		//如果输出是候选者，则将它们添加到此子图中
         }
       }
     }
   }
 }
 
-struct RecomputedSubGraph {
+struct RecomputedSubGraph {		//定义了一个结构体，前面没用到
   std::unordered_set<const NodeDef*> recomputed_source_nodes;
   std::unordered_set<NodeDef*> target_nodes;
 };
 
-// Find groups of ops to recompute together based on `should_recompute`.
+// Find groups of ops to recompute together based on `should_recompute`.	根据 should_recompute 查找需要一起重新计算的运算组。
 std::vector<RecomputedSubGraph> GetOpGroupsToRecompute(
     const GraphDef* graph, const NodeMap& node_map,
     const std::function<bool(const NodeDef&)>& should_recompute,
     const std::function<bool(const NodeDef&)>& is_target) {
   std::unordered_set<const NodeDef*> visited_nodes;
   std::vector<RecomputedSubGraph> subgraphs_to_recompute;
-  std::unordered_set<const NodeDef*> candidate_recompute_nodes =
+  std::unordered_set<const NodeDef*> candidate_recompute_nodes =	//进行更新候选重计算节点
       FindCandidateRecomputeNodes(node_map, graph, should_recompute, is_target);
   for (const NodeDef* recompute_node : candidate_recompute_nodes) {
     if (visited_nodes.count(recompute_node) > 0) {
       continue;
     }
     RecomputedSubGraph current_recomputation;
-    // Build out recomputation groups by expanding to inexpensive-to-recompute
-    // nodes which do not feed target nodes. The goal is to capture some
-    // intermediate activations within this graph.
+    // Build out recomputation groups by expanding to inexpensive-to-recompute	通过扩展到重新计算成本较低来构建重新计算组，找重新计算成本较低的节点
+    // nodes which do not feed target nodes. The goal is to capture some		不提供给目标节点的节点。我们的目标是捕获一些
+    // intermediate activations within this graph.				此图中的中间激活
     std::unordered_set<const NodeDef*> unpruned_recompute_nodes;
     unpruned_recompute_nodes.insert(recompute_node);
     connected_subgraph(node_map,
@@ -216,7 +217,7 @@ std::vector<RecomputedSubGraph> GetOpGroupsToRecompute(
           if (!inserted_feed) {
             // Keep track of nodes which feed directly into a target node. These
             // and nodes which feed into them will define the recomputed
-            // subgraph.
+            // subgraph.	寻求一种方法来跟踪直接提供给目标节点的节点，以及这些节点所依赖的节点，以便确定需要重新计算的子图
             current_recomputation.recomputed_source_nodes.insert(
                 unpruned_recompute_node);
             inserted_feed = true;
@@ -241,7 +242,7 @@ std::vector<RecomputedSubGraph> GetOpGroupsToRecompute(
   return subgraphs_to_recompute;
 }
 
-// Computes the maximum topological numbers of (1) target node components
+// Computes the maximum topological拓扑数字  numbers of (1) target node components
 // (gradient nodes being fed by the recomputation), and (2) child recompute node
 // components for each recomputed node. We will not attach any control
 // dependencies to a recomputation unless they have component numbers greater
